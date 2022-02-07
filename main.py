@@ -11,6 +11,7 @@ from flask_wtf import FlaskForm
 from wtforms import StringField, SubmitField
 from wtforms.validators import DataRequired, URL
 from flask_ckeditor import CKEditor, CKEditorField
+from datetime import date
 
 ## Delete this code:
 # import requests
@@ -44,7 +45,7 @@ class CreatePostForm(FlaskForm):
     subtitle = StringField("Subtitle", validators=[DataRequired()])
     author = StringField("Your Name", validators=[DataRequired()])
     img_url = StringField("Blog Image URL", validators=[DataRequired(), URL()])
-    body = StringField("Blog Content", validators=[DataRequired()])
+    body = CKEditorField("Blog Content", validators=[DataRequired()])
     submit = SubmitField("Submit Post")
 
 
@@ -71,9 +72,53 @@ def contact():
     return render_template("contact.html")
 
 
-@app.route("/edit<post_id>")
+@app.route("/edit/<post_id>")
 def edit_post(post_id):
-    return render_template("playground.html", post_id=post_id)
+    post = BlogPost.query.get(post_id)
+    edit_form = CreatePostForm(
+        title=post.title,
+        subtitle=post.subtitle,
+        img_url=post.img_url,
+        author=post.author,
+        body=post.body
+    )
+    if edit_form.validate_on_submit():
+        post.title = edit_form.title.data
+        post.subtitle = edit_form.subtitle.data
+        post.img_url = edit_form.img_url.data
+        post.author = edit_form.author.data
+        post.body = edit_form.body.data
+        db.session.commit()
+        return redirect(url_for('get_all_posts'))
+    return render_template("make-post.html", form=edit_form, is_edit=True, post_id=post_id)
+
+
+@app.route("/new-post", methods=["POST", "GET"])
+def make_post():
+    form = CreatePostForm()
+    if form.validate_on_submit():
+        date_formatted = date.today().strftime("%B %d %Y")
+        new_blog_post = BlogPost(
+            title=form.title.data,
+            subtitle=form.subtitle.data,
+            date=date_formatted,
+            body=form.body.data,
+            author=form.author.data,
+            img_url=form.img_url.data,
+
+        )
+        db.session.add(new_blog_post)
+        db.session.commit()
+        return redirect(url_for('get_all_posts'))
+    return render_template("make-post.html", is_edit=False, form=form)
+
+
+@app.route("/delete/<int:post_id>")
+def delete(post_id):
+    post_to_delete = BlogPost.query.get(post_id)
+    db.session.delete(post_to_delete)
+    db.session.commit()
+    return redirect(url_for('get_all_posts'))
 
 
 if __name__ == "__main__":
